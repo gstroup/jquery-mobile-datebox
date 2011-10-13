@@ -61,6 +61,7 @@
 		noButtonFocusMode: false,
 		noButton: false,
 		noSetButton: false,
+		openCallback: false,
 		closeCallback: false,
 		open: false,
 		nestedBox: false,
@@ -98,7 +99,7 @@
 		if ( ! event.isPropagationStopped() ) {
 			switch (payload.method) {
 				case 'close':
-					$(this).data('datebox').close();
+					$(this).data('datebox').close(payload.fromCloseButton);
 					break;
 				case 'open':
 					$(this).data('datebox').open();
@@ -375,7 +376,9 @@
 				self.theDate.setYear(self.theDate.getFullYear() + amount);
 				break;
 			case 'm':
-			console.log(o.rolloverMode);
+				if ( o.debug ) {
+					console.log(o.rolloverMode);
+				}
 				if ( o.rolloverMode['m'] || ( self.theDate.getMonth() + amount < 12 && self.theDate.getMonth() + amount > -1 ) ) {
 					self.theDate.setMonth(self.theDate.getMonth() + amount);
 				}
@@ -500,6 +503,10 @@
 			if ( o.afterToday !== false ) {
 				testDate = new Date();
 				if ( self.theDate < testDate ) { self.theDate = testDate; }
+			}
+			if ( o.beforeToday !== false ) {
+				testDate = new Date();
+				if ( self.theDate > testDate ) { self.theDate = testDate; }
 			}
 			if ( o.maxDays !== false ) {
 				testDate = new Date();
@@ -1082,7 +1089,7 @@
 		pickPage.find( ".ui-header a").bind('vclick', function(e) {
 			e.preventDefault();
 			e.stopImmediatePropagation();
-			self.input.trigger('datebox', {'method':'close'});
+			self.input.trigger('datebox', {'method':'close', 'fromCloseButton':true});
 		});
 
 		$.extend(self, {
@@ -1170,7 +1177,9 @@
 						if ( self.dragEnd !== false ) {
 							e.preventDefault();
 							e.stopPropagation();
-							self._offset(self.dragTarget.parent().parent().data('field'), parseInt(( self.dragStart - self.dragEnd ) / 30, 10));
+							var fld = self.dragTarget.parent().parent().data('field'),
+								amount = parseInt(( self.dragStart - self.dragEnd ) / 30);
+							self._offset(fld, amount * ( (fld === "i") ? o.minuteStep : 1 ));
 						}
 					}
 					self.dragStart = false;
@@ -1647,6 +1656,12 @@
 		this._update();
 	},
 	open: function() {
+    // Call the open callback if provided. Additionally, if this
+    // returns falsy then the open of the dialog will be canceled
+    if (this.openCallback && !this.openCallback()) {
+      return false;
+    }
+
 		// Open the controls
 		if ( this.options.useInline ) { return false; } // Ignore if inline
 		if ( this.pickPage.is(':visible') ) { return false; } // Ignore if already open
@@ -1708,7 +1723,7 @@
 			$.mobile.changePage(self.pickPage, {'transition': transition});
 		}
 	},
-	close: function() {
+	close: function(fromCloseButton) {
 		// Close the controls
 		var self = this,
 			callback;
@@ -1719,10 +1734,12 @@
 		
 		// Check options to see if we are closing a dialog, or removing a popup
 		if ( self.options.useDialog ) {
-			$(self.pickPage).dialog('close');
+			if (!fromCloseButton) {
+				$(self.pickPage).dialog('close');
+			}
 			if( !self.thisPage.data("page").options.domCache ){
 				self.thisPage.bind( "pagehide.remove", function() {
-					$(this).remove();
+					$(self).remove();
 				});
 			}
 			self.pickerContent.addClass('ui-datebox-hidden').removeAttr('style').css('zIndex', self.options.zindex);
